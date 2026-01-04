@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "============================================"
-echo "        Azure Virtual Netowrks Deployment    "
-echo "            by Github.com/M4s00m            "
-echo "============================================"
+echo "=============================================="
+echo "        Azure Virtual Networks Deployment     "
+echo "            by Github.com/M4s00m              "
+echo "=============================================="
 echo ""
 
 # ---------- Inputs ----------
@@ -46,7 +46,7 @@ az account show >/dev/null 2>&1 || az login
 
 # ---------- VNet Creation ----------
 echo ""
-echo "🚀 Creating Virtual Network(s)..."
+echo "🚀  Creating Virtual Network(s)..."
 
 for i in $(seq 1 "$VNET_COUNT"); do
 
@@ -64,9 +64,10 @@ for i in $(seq 1 "$VNET_COUNT"); do
     --location "$LOCATION" \
     --address-prefixes "$ADDRESS_PREFIX"
 
-  echo "✅ VNet $VNET_NAME created"
+  echo "✅  VNet $VNET_NAME created"
 done
 
 echo ""
 echo "🎉 The VNet(s) created successfully!"
+
 

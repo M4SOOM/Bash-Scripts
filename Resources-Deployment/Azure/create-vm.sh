@@ -140,6 +140,76 @@ case $SKU_CHOICE in
   *) echo "❌ Invalid storage SKU choice"; exit 1 ;;
 esac
 
+# ---------- Virtual Network ----------
+echo ""
+read -p "Enter Virtual Network name: " VNET_NAME
+read -p "Enter Subnet name: " SUBNET_NAME
+
+VNET_ADDRESS="10.0.0.0/16"
+SUBNET_ADDRESS="10.0.1.0/24"
+
+if ! az network vnet show -g "$RESOURCE_GROUP" -n "$VNET_NAME" &>/dev/null; then
+  read -p "VNet not found. Create new VNet? (y/n): " CREATE_VNET
+  if [[ "$CREATE_VNET" == "y" ]]; then
+    az network vnet create \
+      --resource-group "$RESOURCE_GROUP" \
+      --location "$LOCATION" \
+      --name "$VNET_NAME" \
+      --address-prefix "$VNET_ADDRESS" \
+      --subnet-name "$SUBNET_NAME" \
+      --subnet-prefix "$SUBNET_ADDRESS"
+  else
+    echo "❌ VNet required. Exiting."
+    exit 1
+  fi
+fi
+
+SUBNET_ID=$(az network vnet subnet show \
+  -g "$RESOURCE_GROUP" \
+  --vnet-name "$VNET_NAME" \
+  -n "$SUBNET_NAME" \
+  --query id -o tsv)
+
+# ---------- Network Security Group ----------
+echo ""
+echo "Select NIC Network Security Group option:"
+echo "1) None"
+echo "2) Basic"
+echo "3) Advanced"
+read -p "Enter choice (1-3): " NSG_CHOICE
+
+NSG_NAME="${VM_NAME_INPUT}-nsg"
+
+if [[ "$NSG_CHOICE" != "1" ]]; then
+  az network nsg create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$NSG_NAME"
+fi
+
+# ---------- Inbound Ports ----------
+if [[ "$NSG_CHOICE" != "1" ]]; then
+  echo ""
+  echo "Select inbound ports (space separated):"
+  echo "22 (SSH) 80 (HTTP) 443 (HTTPS) 3389 (RDP)"
+  read -p "Ports: " PORTS
+
+  PRIORITY=100
+  for PORT in $PORTS; do
+    az network nsg rule create \
+      --resource-group "$RESOURCE_GROUP" \
+      --nsg-name "$NSG_NAME" \
+      --name "allow-$PORT" \
+      --priority $PRIORITY \
+      --access Allow \
+      --protocol Tcp \
+      --direction Inbound \
+      --source-address-prefix "*" \
+      --destination-port-range "$PORT"
+    PRIORITY=$((PRIORITY+10))
+  done
+fi
+
 # ---------- Review ----------
 echo ""
 echo "============= REVIEW CONFIGURATION ============="
@@ -158,6 +228,9 @@ if [[ "$VM_COUNT" -eq 1 ]]; then
 else
   echo "VM Name Format : ${VM_NAME_INPUT}-<number>"
 fi
+echo "VNet/Subnet    : $VNET_NAME / $SUBNET_NAME"
+echo "NSG Option     : $NSG_CHOICE"
+[[ "$NSG_CHOICE" != "1" ]] && echo "Inbound Ports  : $PORTS"
 echo "================================================"
 echo ""
 
@@ -171,12 +244,39 @@ az account show >/dev/null 2>&1 || az login
 echo ""
 echo "🚀 Creating Virtual Machine(s)..."
 
-if [[ "$VM_COUNT" -eq 1 ]]; then
-  # ---- Single VM ----
-  VM_NAME="$VM_NAME_INPUT"
+for i in $(seq 1 "$VM_COUNT"); do
 
-  echo "➡ Creating single VM: $VM_NAME"
+  # ---- Naming Logic ----
+  if [[ "$VM_COUNT" -eq 1 ]]; then
+    VM_NAME="$VM_NAME_INPUT"
+  else
+    VM_NAME="${VM_NAME_INPUT}-${i}"
+  fi
 
+  NIC_NAME="${VM_NAME}-nic"
+
+  echo ""
+  echo "➡ Creating NIC: $NIC_NAME"
+
+  # ---- Create NIC (attach NSG only if selected) ----
+  if [[ "$NSG_CHOICE" -eq 1 ]]; then
+    az network nic create \
+      --resource-group "$RESOURCE_GROUP" \
+      --location "$LOCATION" \
+      --name "$NIC_NAME" \
+      --subnet "$SUBNET_ID"
+  else
+    az network nic create \
+      --resource-group "$RESOURCE_GROUP" \
+      --location "$LOCATION" \
+      --name "$NIC_NAME" \
+      --subnet "$SUBNET_ID" \
+      --network-security-group "$NSG_NAME"
+  fi
+
+  echo "➡ Creating VM: $VM_NAME"
+
+  # ---- Create VM using the NIC ----
   az vm create \
     --resource-group "$RESOURCE_GROUP" \
     --location "$LOCATION" \
@@ -185,30 +285,9 @@ if [[ "$VM_COUNT" -eq 1 ]]; then
     --size "$VM_SIZE" \
     --admin-username "$ADMIN_USER" \
     --generate-ssh-keys \
+    --nics "$NIC_NAME" \
     --os-disk-size-gb "$OS_DISK_SIZE" \
     --storage-sku "$STORAGE_SKU"
 
   echo "✅ VM $VM_NAME created successfully"
-
-else
-  # ---- Multiple VMs ----
-  for i in $(seq 1 "$VM_COUNT"); do
-    VM_NAME="${VM_NAME_INPUT}-${i}"
-
-    echo "➡ Creating VM: $VM_NAME"
-
-    az vm create \
-      --resource-group "$RESOURCE_GROUP" \
-      --location "$LOCATION" \
-      --name "$VM_NAME" \
-      --image "$IMAGE" \
-      --size "$VM_SIZE" \
-      --admin-username "$ADMIN_USER" \
-      --generate-ssh-keys \
-      --os-disk-size-gb "$OS_DISK_SIZE" \
-      --storage-sku "$STORAGE_SKU"
-
-    echo "✅ VM $VM_NAME created successfully"
-  done
-fi
-
+done

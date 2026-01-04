@@ -3,7 +3,8 @@
 set -e
 
 echo "============================================"
-echo "        Azure Virtual Machine Creator        "
+echo "        Azure Virtual Machine Deployment    "
+echo "            by Github.com/M4s00m            "
 echo "============================================"
 echo ""
 
@@ -210,3 +211,4 @@ else
     echo "✅ VM $VM_NAME created successfully"
   done
 fi
+

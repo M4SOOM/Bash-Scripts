@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "============================================"
+echo "        Azure Virtual Netowrks Deployment    "
+echo "            by Github.com/M4s00m            "
+echo "============================================"
+echo ""
+
 # ---------- Inputs ----------
 read -p "Enter Resource Group name: " RESOURCE_GROUP
 read -p "Enter Location (e.g. eastus): " LOCATION
@@ -63,3 +69,4 @@ done
 
 echo ""
 echo "🎉 The VNet(s) created successfully!"
+

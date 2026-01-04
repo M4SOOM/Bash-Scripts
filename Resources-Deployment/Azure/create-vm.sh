@@ -24,6 +24,16 @@ if [[ "$VM_COUNT" -le 0 ]]; then
   exit 1
 fi
 
+# ---------- SSH Key Handling ----------
+echo ""
+read -p "Enter SSH key name (press Enter to auto-generate): " SSH_KEY_NAME
+
+# Auto-generate SSH key name if empty
+SSH_KEY_NAME=${SSH_KEY_NAME:-${VM_NAME_INPUT}-ssh-key}
+
+# Local path to store private key
+SSH_KEY_PATH="$HOME/.ssh/${SSH_KEY_NAME}"
+
 # ---------- VM Size ----------
 echo ""
 echo "Select VM Size:"
@@ -218,6 +228,10 @@ if [[ "$NSG_CHOICE" != "1" ]]; then
     --name "$NSG_NAME"
 fi
 
+# ---------- Public IP ----------
+echo ""
+read -p "Do you want to assign a Public IP? (y/n): " CREATE_PUBLIC_IP
+
 # ---------- Inbound Ports ----------
 if [[ "$NSG_CHOICE" != "1" ]]; then
   echo ""
@@ -241,12 +255,46 @@ if [[ "$NSG_CHOICE" != "1" ]]; then
   done
 fi
 
+# ---------- Create / Reuse SSH Key ----------
+echo ""
+echo "🔑 Using SSH key name: $SSH_KEY_NAME"
+
+if az sshkey show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$SSH_KEY_NAME" &>/dev/null; then
+  echo "✅ SSH key already exists in Azure."
+else
+  echo "🔧 Creating new SSH key in Azure..."
+  az sshkey create \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$SSH_KEY_NAME"
+fi
+
+echo ""
+read -p "Do you want to download the SSH private key locally? (y/n): " DOWNLOAD_KEY
+
+if [[ "$DOWNLOAD_KEY" == "y" ]]; then
+  echo "⬇ Downloading SSH private key..."
+
+  az sshkey show \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$SSH_KEY_NAME" \
+    --query privateKey \
+    -o tsv > "$SSH_KEY_PATH"
+
+  chmod 600 "$SSH_KEY_PATH"
+
+  echo "✅ SSH private key saved at:"
+  echo "   $SSH_KEY_PATH"
+  echo "⚠️  Keep this file secure. It will NOT be shown again."
+fi
+
 # ---------- Review ----------
 echo ""
 echo "============= REVIEW CONFIGURATION ============="
 echo "Resource Group : $RESOURCE_GROUP"
 echo "Location       : $LOCATION"
-echo "VM Name        : $VM_NAME"
+echo "VM Name Input  : $VM_NAME_INPUT"
 echo "VM Size        : $VM_SIZE"
 echo "OS Image       : $IMAGE"
 echo "Admin User     : $ADMIN_USER"
@@ -286,25 +334,53 @@ for i in $(seq 1 "$VM_COUNT"); do
 
   NIC_NAME="${VM_NAME}-nic"
 
-  echo ""
-  echo "➡ Creating NIC: $NIC_NAME"
+if [[ "$CREATE_PUBLIC_IP" == "y" ]]; then
+  PUBLIC_IP_NAME="${VM_NAME}-pip"
 
-  # ---- Create NIC (attach NSG only if selected) ----
-  if [[ "$NSG_CHOICE" -eq 1 ]]; then
-    az network nic create \
-      --resource-group "$RESOURCE_GROUP" \
-      --location "$LOCATION" \
-      --name "$NIC_NAME" \
-      --subnet "$SUBNET_ID"
-  else
-    az network nic create \
-      --resource-group "$RESOURCE_GROUP" \
-      --location "$LOCATION" \
-      --name "$NIC_NAME" \
-      --subnet "$SUBNET_ID" \
-      --network-security-group "$NSG_NAME"
-  fi
+echo "➡ Creating Public IP: $PUBLIC_IP_NAME"
 
+  az network public-ip create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$PUBLIC_IP_NAME" \
+    --sku Standard \
+    --allocation-method Static
+fi
+
+echo "➡ Creating NIC: $NIC_NAME"
+
+if [[ "$NSG_CHOICE" -eq 1 && "$CREATE_PUBLIC_IP" != "y" ]]; then
+  az network nic create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$NIC_NAME" \
+    --subnet "$SUBNET_ID"
+
+elif [[ "$NSG_CHOICE" -eq 1 && "$CREATE_PUBLIC_IP" == "y" ]]; then
+  az network nic create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$NIC_NAME" \
+    --subnet "$SUBNET_ID" \
+    --public-ip-address "$PUBLIC_IP_NAME"
+
+elif [[ "$NSG_CHOICE" -ne 1 && "$CREATE_PUBLIC_IP" != "y" ]]; then
+  az network nic create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$NIC_NAME" \
+    --subnet "$SUBNET_ID" \
+    --network-security-group "$NSG_NAME"
+
+else
+  az network nic create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$NIC_NAME" \
+    --subnet "$SUBNET_ID" \
+    --network-security-group "$NSG_NAME" \
+    --public-ip-address "$PUBLIC_IP_NAME"
+fi
   echo "➡ Creating VM: $VM_NAME"
 
   # ---- Create VM using the NIC ----
@@ -315,11 +391,12 @@ for i in $(seq 1 "$VM_COUNT"); do
     --image "$IMAGE" \
     --size "$VM_SIZE" \
     --admin-username "$ADMIN_USER" \
-    --generate-ssh-keys \
+    --ssh-key-name "$SSH_KEY_NAME" \
     --nics "$NIC_NAME" \
     --os-disk-size-gb "$OS_DISK_SIZE" \
     --storage-sku "$STORAGE_SKU"
 
   echo "✅ VM $VM_NAME created successfully"
 done
+
 

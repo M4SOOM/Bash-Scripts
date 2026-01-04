@@ -2,7 +2,7 @@
 
 ## 📌 Overview
 
-**Bash-Scripts** is a collection of Bash-based automation scripts for provisioning and managing **single or multiple cloud resources** across different **Cloud Service Providers (CSPs)**.
+This project is a collection of Bash-based automation scripts for provisioning and managing **single or multiple cloud resources** across different **Cloud Service Providers (CSPs)**.
 
 This repository focuses on **lightweight, CLI-driven automation**, making it ideal for DevOps, Cloud, and Security engineers who want **full visibility and control** over cloud operations without the complexity of heavy Infrastructure-as-Code tools.
 
@@ -25,9 +25,21 @@ Before running any script, ensure the following:
 - Authenticated Cloud account
 - Sufficient permissions to deploy the dedicated resources
 
-🛠️ How to Use the Scripts
-### 1️⃣ Download the Script
+---
+
+## ⚙️ How to Use the Scripts
+1️⃣ Download the Script
 
 ```bash
 curl -LO https://raw.githubusercontent.com/<github-username>/<repo-name>/main/<path-to-script>.sh
+```
+
+2️⃣ Make the Script Executable
+```bash
+chmod +x <file-name>.sh
+```
+
+3️⃣ Remove Windows / CRLF characters to avoid execution issues (Mandatory Step)
+```bash
+sed -i 's/\r$//' *.sh
 ```

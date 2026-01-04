@@ -140,34 +140,65 @@ case $SKU_CHOICE in
   *) echo "❌ Invalid storage SKU choice"; exit 1 ;;
 esac
 
-# ---------- Virtual Network ----------
-echo ""
-read -p "Enter Virtual Network name: " VNET_NAME
-read -p "Enter Subnet name: " SUBNET_NAME
+# ---------- Virtual Network & Subnet----------
 
+DEFAULT_VNET_NAME="${VM_NAME_INPUT}-vnet"
+DEFAULT_SUBNET_NAME="${VM_NAME_INPUT}-subnet"
 VNET_ADDRESS="10.0.0.0/16"
 SUBNET_ADDRESS="10.0.1.0/24"
 
-if ! az network vnet show -g "$RESOURCE_GROUP" -n "$VNET_NAME" &>/dev/null; then
-  read -p "VNet not found. Create new VNet? (y/n): " CREATE_VNET
-  if [[ "$CREATE_VNET" == "y" ]]; then
-    az network vnet create \
+read -p "Enter Virtual Network name (press Enter to auto-create): " VNET_NAME
+read -p "Enter Subnet name (press Enter to auto-create): " SUBNET_NAME
+
+# Auto-assign defaults if empty
+VNET_NAME=${VNET_NAME:-$DEFAULT_VNET_NAME}
+SUBNET_NAME=${SUBNET_NAME:-$DEFAULT_SUBNET_NAME}
+
+echo ""
+echo "Using VNet:   $VNET_NAME"
+echo "Using Subnet: $SUBNET_NAME"
+
+# Check if VNet exists
+if ! az network vnet show \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$VNET_NAME" &>/dev/null; then
+
+  echo "🔧 VNet not found. Creating VNet + Subnet..."
+
+  az network vnet create \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --name "$VNET_NAME" \
+    --address-prefix "$VNET_ADDRESS" \
+    --subnet-name "$SUBNET_NAME" \
+    --subnet-prefix "$SUBNET_ADDRESS"
+
+else
+  echo "✅ VNet exists."
+
+  # Check if Subnet exists
+  if ! az network vnet subnet show \
+    --resource-group "$RESOURCE_GROUP" \
+    --vnet-name "$VNET_NAME" \
+    --name "$SUBNET_NAME" &>/dev/null; then
+
+    echo "🔧 Subnet not found. Creating subnet..."
+
+    az network vnet subnet create \
       --resource-group "$RESOURCE_GROUP" \
-      --location "$LOCATION" \
-      --name "$VNET_NAME" \
-      --address-prefix "$VNET_ADDRESS" \
-      --subnet-name "$SUBNET_NAME" \
-      --subnet-prefix "$SUBNET_ADDRESS"
+      --vnet-name "$VNET_NAME" \
+      --name "$SUBNET_NAME" \
+      --address-prefix "$SUBNET_ADDRESS"
   else
-    echo "❌ VNet required. Exiting."
-    exit 1
+    echo "✅ Subnet exists."
   fi
 fi
 
+# Get Subnet ID
 SUBNET_ID=$(az network vnet subnet show \
-  -g "$RESOURCE_GROUP" \
+  --resource-group "$RESOURCE_GROUP" \
   --vnet-name "$VNET_NAME" \
-  -n "$SUBNET_NAME" \
+  --name "$SUBNET_NAME" \
   --query id -o tsv)
 
 # ---------- Network Security Group ----------
@@ -291,3 +322,4 @@ for i in $(seq 1 "$VM_COUNT"); do
 
   echo "✅ VM $VM_NAME created successfully"
 done
+

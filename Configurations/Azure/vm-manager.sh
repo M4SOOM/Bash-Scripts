@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
-echo "=============================================="
-echo "        Azure Virtual Machine Manager         "
-echo "            by Github.com/M4s00m              "
-echo "=============================================="
-echo ""
+echo "============================================"
+echo "        Azure Virtual Machine Deployment    "
+echo "            by Github.com/M4s00m            "
+echo "============================================"
 
 # ============================
 # GLOBAL CONFIG
@@ -27,31 +25,80 @@ select_vm() {
   read -rp "Enter VM Name: " VM_NAME
 }
 
+resource_exists() {
+  local CMD="$1"
+  eval "$CMD" &>/dev/null
+}
+
+prompt_create_or_continue() {
+  local RESOURCE_DESC="$1"
+  local CREATE_CMD="$2"
+
+  echo "⚠️ Resource not found: $RESOURCE_DESC"
+  read -rp "Press [C] to create or [Enter] to continue anyway: " CHOICE
+
+  if [[ "${CHOICE,,}" == "c" ]]; then
+    echo "➡ Creating $RESOURCE_DESC..."
+    eval "$CREATE_CMD"
+  else
+    echo "➡ Continuing without creating $RESOURCE_DESC (may fail later)"
+  fi
+}
+
+ensure_resource_group() {
+  if ! resource_exists "az group show -n \"$RESOURCE_GROUP\""; then
+    prompt_create_or_continue \
+      "Resource Group $RESOURCE_GROUP" \
+      "az group create -n \"$RESOURCE_GROUP\" -l \"$LOCATION\""
+  fi
+}
+
+ensure_nsg() {
+  if ! resource_exists "az network nsg show -g \"$RESOURCE_GROUP\" -n \"$NSG_NAME\""; then
+    prompt_create_or_continue \
+      "NSG $NSG_NAME" \
+      "az network nsg create -g \"$RESOURCE_GROUP\" -n \"$NSG_NAME\""
+  fi
+}
+
+ensure_vnet() {
+  if ! resource_exists "az network vnet show -g \"$RESOURCE_GROUP\" -n \"$VNET_NAME\""; then
+    prompt_create_or_continue \
+      "VNet $VNET_NAME" \
+      "az network vnet create -g \"$RESOURCE_GROUP\" -n \"$VNET_NAME\" --address-prefixes 10.0.0.0/16"
+  fi
+}
+
 # ============================
 # VM POWER OPERATIONS
 # ============================
 start_vm() {
   select_vm
+  ensure_resource_group
   az vm start -g "$RESOURCE_GROUP" -n "$VM_NAME"
 }
 
 stop_vm() {
   select_vm
+  ensure_resource_group
   az vm stop -g "$RESOURCE_GROUP" -n "$VM_NAME"
 }
 
 deallocate_vm() {
   select_vm
+  ensure_resource_group
   az vm deallocate -g "$RESOURCE_GROUP" -n "$VM_NAME"
 }
 
 restart_vm() {
   select_vm
+  ensure_resource_group
   az vm restart -g "$RESOURCE_GROUP" -n "$VM_NAME"
 }
 
 resize_vm() {
   select_vm
+  ensure_resource_group
   read -rp "Enter new VM size (e.g. Standard_B2s): " NEW_SIZE
   az vm resize -g "$RESOURCE_GROUP" -n "$VM_NAME" --size "$NEW_SIZE"
 }
@@ -61,6 +108,7 @@ resize_vm() {
 # ============================
 attach_disk() {
   select_vm
+  ensure_resource_group
   read -rp "Disk name: " DISK_NAME
   read -rp "Disk size (GB): " DISK_SIZE
 
@@ -73,6 +121,8 @@ attach_disk() {
 }
 
 snapshot_disk() {
+  read -rp "Resource Group: " RESOURCE_GROUP
+  ensure_resource_group
   read -rp "Disk ID: " DISK_ID
   read -rp "Snapshot name: " SNAP_NAME
 
@@ -86,7 +136,11 @@ snapshot_disk() {
 # NETWORK & ACCESS
 # ============================
 enable_bastion() {
+  read -rp "Resource Group: " RESOURCE_GROUP
+  ensure_resource_group
   read -rp "VNet name: " VNET_NAME
+  ensure_vnet
+
   az network bastion create \
     -g "$RESOURCE_GROUP" \
     -n bastion-host \
@@ -95,7 +149,11 @@ enable_bastion() {
 }
 
 configure_nsg() {
+  read -rp "Resource Group: " RESOURCE_GROUP
+  ensure_resource_group
   read -rp "NSG name: " NSG_NAME
+  ensure_nsg
+
   az network nsg rule create \
     -g "$RESOURCE_GROUP" \
     --nsg-name "$NSG_NAME" \
@@ -111,6 +169,8 @@ configure_nsg() {
 # ============================
 disable_password_auth() {
   select_vm
+  ensure_resource_group
+
   az vm run-command invoke \
     -g "$RESOURCE_GROUP" \
     -n "$VM_NAME" \
@@ -120,6 +180,7 @@ disable_password_auth() {
 
 enable_managed_identity() {
   select_vm
+  ensure_resource_group
   az vm identity assign -g "$RESOURCE_GROUP" -n "$VM_NAME"
 }
 
@@ -128,6 +189,8 @@ enable_managed_identity() {
 # ============================
 patch_os() {
   select_vm
+  ensure_resource_group
+
   az vm run-command invoke \
     -g "$RESOURCE_GROUP" \
     -n "$VM_NAME" \
@@ -139,6 +202,8 @@ patch_os() {
 # MONITORING
 # ============================
 enable_vm_insights() {
+  select_vm
+  ensure_resource_group
   az monitor vm-insights enable -g "$RESOURCE_GROUP" -n "$VM_NAME"
 }
 
@@ -147,7 +212,9 @@ enable_vm_insights() {
 # ============================
 auto_shutdown() {
   select_vm
+  ensure_resource_group
   read -rp "Shutdown time (HHMM, UTC): " TIME
+
   az vm auto-shutdown \
     -g "$RESOURCE_GROUP" \
     -n "$VM_NAME" \
@@ -159,6 +226,8 @@ auto_shutdown() {
 # ============================
 enable_backup() {
   select_vm
+  ensure_resource_group
+
   az backup protection enable-for-vm \
     --resource-group "$RESOURCE_GROUP" \
     --vm "$VM_NAME" \

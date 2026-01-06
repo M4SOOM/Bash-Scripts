@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "============================================"
-echo "        Azure Virtual Machine Deployment    "
+echo "        Azure Virtual Machine Management    "
 echo "            by Github.com/M4s00m            "
 echo "============================================"
 

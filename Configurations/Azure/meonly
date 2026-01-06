@@ -1,0 +1,17 @@
+
+curl -LO https://raw.githubusercontent.com/<github repo>
+
+nano file name
+
+once made changes, CTRL + O and then ctrl + X
+
+chmod +x file name
+
+sed -i 's/\r$//' *.sh
+
+./file name
+
+echo "============================================"
+echo "        Azure Virtual Machine Deployment    "
+echo "            by Github.com/M4s00m            "
+echo "============================================"

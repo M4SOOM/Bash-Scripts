@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+
+echo "=============================================="
+echo "        Azure Virtual Machine Manager         "
+echo "            by Github.com/M4s00m              "
+echo "=============================================="
+echo ""
+
 # ============================
 # GLOBAL CONFIG
 # ============================

@@ -8,10 +8,8 @@ on:
 
 jobs:
   call-security-logic:
-    # Double check if '@main' should be '@master'
     uses: M4SOOM/ScanRep-Reports/.github/workflows/msdo.yml@main
     permissions:
       contents: read
       security-events: write
       actions: read
-      

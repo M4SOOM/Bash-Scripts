@@ -8,7 +8,7 @@ on:
 
 jobs:
   call-security-logic:
-    # Ensure this path matches your central repo exactly
+    # Double check if '@main' should be '@master'
     uses: M4SOOM/ScanRep-Reports/.github/workflows/msdo.yml@main
     permissions:
       contents: read

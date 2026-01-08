@@ -5,13 +5,12 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  schedule:
-    - cron: '0 0 * * 1' # Runs every Monday at midnight to find new CVEs
 
 jobs:
   call-security-logic:
-    # Reference: {owner}/{repo}/.github/workflows/{filename}@{branch}
+    # Ensure this path matches your central repo exactly
     uses: M4SOOM/ScanRep-Reports/.github/workflows/msdo.yml@main
     permissions:
       contents: read
       security-events: write
+      actions: read

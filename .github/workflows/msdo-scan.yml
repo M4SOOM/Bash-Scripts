@@ -5,6 +5,11 @@ on:
     branches: [ main ]
   pull_request:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   call-msdo:
     uses: M4SOOM/ScanRep-Reports/.github/workflows/msdo.yml@main
+    permissions: inherit

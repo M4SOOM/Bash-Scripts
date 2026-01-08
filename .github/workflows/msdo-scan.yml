@@ -1,0 +1,10 @@
+name: MSDO Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  call-msdo:
+    uses: M4SOOM/ScanRep-Reports/.github/workflows/msdo.yml@main
